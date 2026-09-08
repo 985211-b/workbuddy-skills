@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Context 简介</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #333; }
+    h1 { color: #0366d6; }
+    h2 { border-bottom: 1px solid #eaecef; padding-bottom: .3rem; }
+    code { background: #f6f8fa; padding: .2em .4em; border-radius: 3px; }
+    ul li { margin: .5rem 0; }
+  </style>
+</head>
+<body>
+  <h1>LLM Context 简介</h1>
+  <p>LLM Context（上下文）是模型在每次推理时可见的全部信息集合。合理管理上下文能显著提升 Agent 的回答质量与任务完成度。</p>
+
+  <h2>上下文组成</h2>
+  <ul>
+    <li><strong>系统提示（System Prompt）</strong>：定义模型角色、规则与输出格式</li>
+    <li><strong>用户消息（User Message）</strong>：当前任务或问题</li>
+    <li><strong>历史对话</strong>：多轮交互记录</li>
+    <li><strong>外部注入信息</strong>：文件内容、工具返回结果、记忆片段等</li>
+  </ul>
+
+  <h2>上下文管理技巧</h2>
+  <ul>
+    <li>只保留与当前任务最相关的历史，避免信息过载</li>
+    <li>长文档采用「分块 + 摘要」策略</li>
+    <li>把结构化信息（如 JSON）放在用户消息末尾</li>
+    <li>为工具调用结果添加明确的角色标签，便于模型理解</li>
+  </ul>
+
+  <h2>参考</h2>
+  <p>回到 <a href="agent.html">Agent 学习资料</a>。</p>
+</body>
+</html>
