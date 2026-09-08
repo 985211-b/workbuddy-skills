@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>概念关系</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #333; }
+    h1 { color: #0366d6; }
+    h2 { border-bottom: 1px solid #eaecef; padding-bottom: .3rem; }
+    code { background: #f6f8fa; padding: .2em .4em; border-radius: 3px; }
+    ul li { margin: .5rem 0; }
+    .relationship { background: #f6f8fa; padding: 1rem; border-left: 4px solid #0366d6; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <h1>概念关系</h1>
+  <p>本页梳理 WorkBuddy 生态中几个核心概念之间的联系，帮助理解 Agent、Skill、LLM Context、Memory 与 Tools 如何协同工作。</p>
+
+  <div class="relationship">
+    <h2>Agent ↔ Skill</h2>
+    <p>Agent 是执行任务的智能体，Skill 是 Agent 可调用的能力模块。多个 Skill 可以被加载到一个会话中，根据用户输入触发。</p>
+  </div>
+
+  <div class="relationship">
+    <h2>Agent ↔ LLM Context</h2>
+    <p>Agent 将 Skill 说明、记忆、工具结果等注入 LLM Context，让模型在每次推理时拥有完成任务所需的全部信息。</p>
+  </div>
+
+  <div class="relationship">
+    <h2>Skill ↔ Memory</h2>
+    <p>Skill 可以读取 Memory 中的用户偏好与长期事实，从而提供更加个性化的服务；Skill 的执行结果也可写回 Memory。</p>
+  </div>
+
+  <div class="relationship">
+    <h2>Agent ↔ Tools / MCP</h2>
+    <p>Agent 通过 Tools（包括 MCP 工具）与外部世界交互，例如读写文件、调用 API、发送邮件、操作浏览器等。</p>
+  </div>
+
+  <h2>延伸阅读</h2>
+  <ul>
+    <li><a href="agent.html">Agent 学习资料</a></li>
+    <li><a href="llm-context.html">LLM Context 学习资料</a></li>
+    <li><a href="skill.html">Skill 学习资料</a></li>
+  </ul>
+</body>
+</html>
