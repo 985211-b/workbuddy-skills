@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent 简介</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #333; }
+    h1 { color: #0366d6; }
+    h2 { border-bottom: 1px solid #eaecef; padding-bottom: .3rem; }
+    code { background: #f6f8fa; padding: .2em .4em; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Agent 简介</h1>
+  <p>Agent（智能体）是能够感知环境、做出决策并执行动作的 AI 系统。它通常由大语言模型（LLM）驱动，配合外部工具（Tools / MCP）完成复杂任务。</p>
+
+  <h2>核心特征</h2>
+  <ul>
+    <li><strong>感知</strong>：读取用户输入、文件、API 数据等</li>
+    <li><strong>规划</strong>：将目标拆分为可执行的子任务</li>
+    <li><strong>工具调用</strong>：使用外部服务或代码能力完成动作</li>
+    <li><strong>记忆</strong>：保存关键信息，支持多轮上下文</li>
+  </ul>
+
+  <h2>示例架构</h2>
+  <pre><code>用户输入 -> Agent -> 规划 -> 工具调用 -> 观察结果 -> 回答</code></pre>
+
+  <h2>相关概念</h2>
+  <p>参见 <a href="skill.html">Skill 学习资料</a> 与 <a href="llm-context.html">LLM Context 学习资料</a>。</p>
+</body>
+</html>
