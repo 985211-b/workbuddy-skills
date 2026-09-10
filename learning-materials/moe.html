@@ -1,80 +1,142 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MoE 学习笔记</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #333; }
-    h1 { color: #0366d6; }
-    h2 { border-bottom: 1px solid #eaecef; padding-bottom: .3rem; }
-    code { background: #f6f8fa; padding: .2em .4em; border-radius: 3px; }
-    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-    th, td { border: 1px solid #eaecef; padding: .4rem .6rem; text-align: left; font-size: .92rem; }
-    th { background: #f6f8fa; }
-    blockquote { border-left: 4px solid #0366d6; margin: 1rem 0; padding: .3rem 1rem; background: #f6f8fa; color: #555; }
-    a { color: #0366d6; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE · 一图看懂</title>
+<link rel="stylesheet" href="design.css">
 </head>
 <body>
-  <h1>MoE 学习笔记（混合专家模型）</h1>
 
-  <h2>概念个人解释</h2>
-  <p><strong>MoE（Mixture of Experts，混合专家模型）</strong>是一种"养一堆专家、按需点名"的模型架构。传统稠密模型像一个什么都要亲力亲为的全科医生——每生成一个字，全脑参数都得动一遍；MoE 则像一家大医院：院里有几百位专科医生（专家），每个病人进门先由导诊台（门控路由器）看一眼症状，只叫上最对口的几位来会诊，其他人继续歇着。</p>
-  <p>关键结果：<strong>模型的总知识量可以堆到万亿级，但每次推理的算力消耗只相当于一个几十亿参数的小模型</strong>。DeepSeek-V3 总参数 6850 亿，单次推理只激活约 370 亿，计算成本压到同规模稠密模型的几十分之一。</p>
+<h1>MoE 混合专家模型</h1>
+<p class="lead">一个"前台 + 专家团"的公司——每次只派少数专家干活，其他人歇着</p>
+<div class="toc"><span>① 是什么</span><span>② 怎么运转</span><span>③ 为什么省钱</span><span>④ 实际部署</span><span>⑤ 常见误区</span><span>⑥ 记住这几点</span></div>
 
-  <h2>核心机制与组成</h2>
-  <p>MoE 层由四个部件构成，工作流程是"评估 → 评分 → 分配 → 处理 → 整合"：</p>
-  <table>
-    <tr><th>部件</th><th>作用</th><th>通俗类比</th></tr>
-    <tr><td>专家（Experts）</td><td>多个结构相同、参数各自独立的小型前馈网络（FFN）</td><td>各科专科医生</td></tr>
-    <tr><td>门控网络（Router）</td><td>给每个 token 对所有专家打分，选出 Top-K 个</td><td>导诊台分诊</td></tr>
-    <tr><td>稀疏激活</td><td>每个 token 只激活 K 个专家（常见 1~8 个），其余休眠</td><td>只叫对口医生</td></tr>
-    <tr><td>输出组合</td><td>被选中专家的输出按门控置信度加权融合</td><td>会诊意见加权汇总</td></tr>
-  </table>
-  <ul>
-    <li><strong>按 token 路由，不是按问题路由</strong>：一句话里的不同词可能分别走不同专家，每一层 MoE 都会重新分诊一次。</li>
-    <li><strong>专家分工是训练涌现的</strong>，不是人为指定的——没有哪个专家被代码指定"你负责数学"。</li>
-    <li><strong>最大工程敌人是"专家塌缩"</strong>：路由器总把活派给少数明星专家，其他专家吃不到训练信号越来越弱。DeepSeek-V3 用无辅助损失的偏置调整方案解决，被公认为较优雅的解法。</li>
-    <li><strong>推理瓶颈是通信而非计算</strong>：专家分散在多张 GPU 上，token 通过 All-to-All 通信来回跑，这是 MoE 与稠密部署最大的差异。</li>
-  </ul>
+<div class="def"><strong>MoE（Mixture of Experts）</strong> = 把一个大模型拆成 <strong>门控路由（前台）</strong> + <strong>多个专家网络（专家团）</strong>。每个 token 只激活其中少数几个专家，其余参数不参与计算——<strong>参数可以很大，算力花得很省</strong>。</div>
 
-  <h2>实际应用场景</h2>
-  <h3>电商客服平台的 AI 客服系统选型与部署</h3>
-  <p><strong>背景</strong>：某中型电商日均 50 万次客服对话，此前用稠密 70B 模型 API，月账单约 12 万元，高峰延迟 2 秒以上影响转化。</p>
-  <p><strong>执行流程</strong>：</p>
-  <ol>
-    <li><strong>选型</strong>：对比 DeepSeek-V3（685B/激活 37B）与 Qwen3-235B-A22B（235B/激活 22B），客服场景质量不低于原模型，输入单价约为原来的 1/3~1/5。</li>
-    <li><strong>换 API</strong>：月成本降到约 3 万元，高峰延迟降到 600ms 以内——MoE 稀疏激活让服务商吞吐更高、定价更低。</li>
-    <li><strong>评估自托管</strong>：发现关键坑——Qwen3-235B 的 FP8 权重需约 235GB 显存、8×H100 起步；虽只激活 22B，但<strong>全部 235B 权重都必须驻留显存</strong>。当前流量下自托管 TCO 反而高于 API，列为日流量翻三倍后的预案。</li>
-  </ol>
-  <p><strong>落地效果</strong>：成本下降约 75%，P95 延迟 2s → 0.6s，咨询转化率提升。</p>
-  <blockquote>MoE 落地三个核心决策点：API 侧省钱立竿见影；自托管是显存游戏不是算力游戏；高并发才吃满 MoE 的吞吐红利。</blockquote>
+<h2><span class="num">1</span>核心机制：一张图看懂</h2>
+<figure>
+<svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+<rect x="280" y="10" width="160" height="40" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+<text x="360" y="35" text-anchor="middle" font-size="14" font-weight="bold" fill="#2563eb">输入 token："苹果"</text>
+<line x1="360" y1="50" x2="360" y2="80" stroke="#9ca3af" stroke-width="2"/>
+<rect x="270" y="80" width="180" height="44" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+<text x="360" y="100" text-anchor="middle" font-size="13" font-weight="bold" fill="#d97706">门控路由 Router</text>
+<text x="360" y="116" text-anchor="middle" font-size="11" fill="#6b7280">决定派哪些专家</text>
+<line x1="300" y1="124" x2="140" y2="170" stroke="#059669" stroke-width="2.5"/>
+<line x1="330" y1="124" x2="330" y2="170" stroke="#059669" stroke-width="2.5"/>
+<line x1="420" y1="124" x2="420" y2="170" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="4 3"/>
+<line x1="420" y1="124" x2="580" y2="170" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="4 3"/>
+<rect x="60" y="170" width="150" height="40" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+<text x="135" y="195" text-anchor="middle" font-size="13" font-weight="bold" fill="#059669">专家 A ✅ 激活</text>
+<rect x="255" y="170" width="150" height="40" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+<text x="330" y="195" text-anchor="middle" font-size="13" font-weight="bold" fill="#059669">专家 B ✅ 激活</text>
+<rect x="345" y="170" width="150" height="40" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="420" y="195" text-anchor="middle" font-size="13" fill="#9ca3af">专家 C 😴 休息</text>
+<rect x="505" y="170" width="150" height="40" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="580" y="195" text-anchor="middle" font-size="13" fill="#9ca3af">专家 D 😴 休息</text>
+<line x1="135" y1="210" x2="330" y2="250" stroke="#9ca3af" stroke-width="2"/>
+<line x1="330" y1="210" x2="330" y2="250" stroke="#9ca3af" stroke-width="2"/>
+<rect x="245" y="250" width="230" height="40" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+<text x="360" y="275" text-anchor="middle" font-size="13" font-weight="bold" fill="#2563eb">加权合并 → 输出结果</text>
+</svg>
+<figcaption>每个 token 只激活 Top-K 个专家（常见 K=2 或 8），其余专家零计算</figcaption>
+</figure>
+<div class="tip"><b>💡 一句话：参数规模决定"公司有多大"，路由决定"这次请谁出手"</b><p>总参数（公司人数）可以非常大，激活参数（当班人数）却很小——大而不贵。</p></div>
+<details><summary>路由是怎么"选人"的（点开看）</summary>
+<p>门控网络对每个 token 打分，选分数最高的 K 个专家，按分数加权合并输出。选人发生在<strong>每一层、每一个 token</strong>——同一句话里，"苹果"可能走 A+B，"很好吃"可能走 B+D。副产物：有的专家被疯狂点名（负载不均），所以训练时要用辅助损失函数强制"雨露均沾"。</p></details>
 
-  <h2>易混淆问题与使用边界</h2>
-  <h3>常见误区</h3>
-  <ol>
-    <li><strong>"MoE 省显存"——恰恰相反</strong>：激活参数低 ≠ 显存占用低。DeepSeek-V3 的 FP16 权重约 1.3TB。MoE 省的是计算（FLOPs），费的是显存。这是自托管决策最常见的翻车点。</li>
-    <li><strong>"专家按领域分工"——并非如此</strong>：分工是涌现的统计倾向，不可解释、不可指定。</li>
-    <li><strong>"MoE 一定更快"——只在高并发下成立</strong>：单请求低并发时，路由开销 + 更大的权重访存反而让单 token 延迟高于小稠密模型。</li>
-    <li><strong>与模型集成（Ensemble）的区别</strong>：Ensemble 是多个完整模型投票，算力叠加；MoE 是一个模型内部分工，算力稀疏。与多 Agent 也不同：MoE 是网络层结构，Agent 是应用层编排。</li>
-  </ol>
-  <h3>使用边界（它做不到的事）</h3>
-  <ul>
-    <li><strong>不能降低显存/部署门槛</strong>：不能只加载"常用专家"省显存，按需加载会被 PCIe 带宽拖垮吞吐。小显存场景用小稠密模型。</li>
-    <li><strong>不能自动保证负载均衡</strong>：训练时无干预会专家塌缩；推理时输入分布偏斜会导致部分 GPU 过热、吞吐波动，生产环境需监控专家利用率。</li>
-    <li><strong>不适用于所有模态</strong>：高冗余度的密集视觉任务上，MoE 可能不如同档全激活稠密模型，优势场景在语言与推理类负载。</li>
-  </ul>
+<h2><span class="num">2</span>为什么省：稠密 vs 稀疏</h2>
+<figure>
+<svg viewBox="0 0 720 150" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+<rect x="40" y="20" width="280" height="110" rx="10" fill="#fef2f2" stroke="#dc2626"/>
+<text x="180" y="45" text-anchor="middle" font-size="14" font-weight="bold" fill="#dc2626">稠密模型（传统）</text>
+<rect x="70" y="60" width="220" height="16" fill="#dc2626" opacity=".8"/>
+<rect x="70" y="80" width="220" height="16" fill="#dc2626" opacity=".6"/>
+<rect x="70" y="100" width="220" height="16" fill="#dc2626" opacity=".4"/>
+<text x="345" y="75" font-size="20" fill="#6b7280">→</text>
+<rect x="400" y="20" width="280" height="110" rx="10" fill="#ecfdf5" stroke="#059669"/>
+<text x="540" y="45" text-anchor="middle" font-size="14" font-weight="bold" fill="#059669">MoE 模型</text>
+<rect x="430" y="60" width="70" height="16" fill="#059669" opacity=".8"/>
+<rect x="430" y="80" width="70" height="16" fill="#059669" opacity=".6"/>
+<rect x="430" y="100" width="70" height="16" fill="#059669" opacity=".4"/>
+<text x="640" y="90" font-size="11" fill="#6b7280">其余不上色</text>
+</svg>
+<figcaption>左：每个 token 动用全部参数。右：每个 token 只动用一小撮专家</figcaption>
+</figure>
+<table>
+<tr><th></th><th>稠密模型</th><th>MoE 模型</th></tr>
+<tr><td>算力消耗</td><td>随参数线性增长</td><td>只算被激活的部分</td></tr>
+<tr><td>典型例子</td><td>LLaMA 70B：671B 参数全算</td><td>DeepSeek-V3：671B 参数，激活仅 37B</td></tr>
+<tr><td>显存占用</td><td>= 计算量</td><td>⚠️ 仍是全量（参数都要驻显存）</td></tr>
+</table>
+<div class="tip"><b>💡 记住关键区别：MoE 省的是"计算"，不省"显存"</b><p>所有专家都得装进显卡待命，只是不用人人出手。所以 MoE = 更适合"显存够、算力贵"的推理场景。</p></div>
 
-  <h2>参考核验链接</h2>
-  <ul>
-    <li><a href="https://www.nvidia.cn/glossary/mixture-of-experts/">NVIDIA 官方术语表：混合专家模型</a>（定义、四要素、负载均衡挑战）</li>
-    <li><a href="https://arxiv.org/abs/2412.19437">DeepSeek-V3 技术报告（arXiv）</a>（685B/37B、无辅助损失负载均衡的一手出处）</li>
-    <li><a href="https://cloud.tencent.com/developer/article/2672593">腾讯云开发者社区：混合专家模型 MoE 的概述</a>（机制拆解与工作流程）</li>
-    <li><a href="https://hub.baai.ac.cn/knowledge-tree/6e426a4a-a3d4-4653-b54c-31cb68325bb3">智源社区：混合专家模型知识树</a>（学术脉络：Jacobs 1991 → Switch Transformer → 现代 MoE）</li>
-  </ul>
+<h2><span class="num">3</span>代表模型：谁在用</h2>
+<div class="cards">
+<div class="card"><b>Mixtral 8×7B</b><p>8 个专家各 7B，每 token 激活 2 个。开源 MoE 的普及者。</p></div>
+<div class="card"><b>DeepSeek-V3</b><p>671B 总参数 / 37B 激活，256 个细粒度专家，训练成本约为同级稠密模型零头。</p></div>
+<div class="card"><b>GPT-4（传闻）</b><p>据 SemiAnalysis 等分析为 MoE 架构，8×220B、每 token 激活 2 个专家。</p></div>
+</div>
+<details><summary>更多模型与时间线（点开看）</summary>
+<table>
+<tr><th>年份</th><th>模型</th><th>要点</th></tr>
+<tr><td>1991</td><td>Adaptive Mixtures（Jacobs）</td><td>思想源头，早于深度学习热潮</td></tr>
+<tr><td>2017</td><td>Sparsely-Gated MoE（Google）</td><td>首个现代大规模实现，LSTM 时代</td></tr>
+<tr><td>2021</td><td>Switch Transformer</td><td>简化为 Top-1 路由，证明可行</td></tr>
+<tr><td>2024</td><td>Mixtral 8×7B</td><td>开源界爆点，性能对标 GPT-3.5</td></tr>
+<tr><td>2024-25</td><td>DeepSeek-V2/V3</td><td>细粒度专家 + 共享专家，成本大幅下探</td></tr>
+</table>
+</details>
 
-  <h2>相关概念</h2>
-  <p>参见 <a href="agent.html">Agent 学习资料</a>、<a href="llm-context.html">LLM Context 学习资料</a> 与 <a href="skill.html">Skill 学习资料</a>。本笔记由 <code>ai-concept-structured-learning</code> 技能生成（2026-09-08）。</p>
+<h2><span class="num">4</span>落地：选型与部署要点</h2>
+<details open><summary>什么情况该选 MoE（点开看）</summary>
+<table>
+<tr><th>你的场景</th><th>建议</th></tr>
+<tr><td>显存充足、推理量大、算力贵</td><td>✅ MoE 优势最大</td></tr>
+<tr><td>单卡部署、显存紧张</td><td>⚠️ 稠密小模型更省心</td></tr>
+<tr><td>本地设备/边缘端</td><td>❌ 全量显存驻留是硬伤</td></tr>
+</table>
+<p><strong>部署三件事</strong>：① 专家并行（Expert Parallelism）把不同专家切到不同卡；② 框架支持要到位（vLLM、SGLang 等已原生支持主流 MoE）；③ 量化时优先考虑显存收益（如专家权重低秩压缩）。</p></details>
+<details><summary>训练侧的三个坑（点开看）</summary>
+<p><strong>负载不均</strong>：热门专家被挤爆、冷门专家闲置——用辅助损失平衡。<strong>路由不稳定</strong>：训练早期专家分工乱——加噪声扰动 + 专家 dropout。<strong>知识冗余</strong>：多个专家学成同一套——细粒度专家 + 共享专家设计（DeepSeek 方案）。</p></details>
+
+<h2><span class="num">5</span>常见误区</h2>
+<div class="warn"><b>❌ "激活 37B = 37B 的模型"</b><p>激活参数只是计算量视角；671B 的知识容量仍然在，效果对标的是大稠密模型，不是小模型。</p></div>
+<div class="warn"><b>❌ 专家 = 懂"领域"的专家</b><p>专家分工是训练中自发形成的，并不对应"医疗专家""法律专家"这类人类可读的领域划分。看激活模式分析很有用，但别按行业语义脑补。</p></div>
+<div class="warn"><b>❌ MoE 更小更省显存</b><p>省算力不省显存。推理成本降，部署门槛（显存）反而更高。</p></div>
+
+<h2><span class="num">6</span>记住这几点</h2>
+<div class="memo">
+<h3>✅ 记忆锚点</h3>
+<ul>
+<li><strong>一句话</strong>：门控路由当前台，每 token 只派 Top-K 个专家出手</li>
+<li><strong>省钱逻辑</strong>：省计算、不省显存——"人多，当班的少"</li>
+<li><strong>规模感</strong>：DeepSeek-V3 = 671B 总参数 / 37B 激活，约 5.5%</li>
+<li><strong>选型口诀</strong>：推理量大显存够选 MoE；单卡边缘端选稠密</li>
+<li><strong>训练三坑</strong>：负载不均、路由抖动、知识冗余，各有成熟解法</li>
+</ul>
+</div>
+
+<h2><span class="num">7</span>五道测试题（点开看答案）</h2>
+<details><summary>① MoE "省"的是什么？</summary><p>✅ <strong>算力</strong>（计算量），<strong>不省显存</strong>——所有专家都得装进显卡待命</p></details>
+<details><summary>② 门控路由（Router）的作用是？</summary><p>✅ 对每个 token 选 Top-K 专家并按分数加权合并。决定"派谁出手"</p></details>
+<details><summary>③ DeepSeek-V3（671B 总 / 37B 激活）单 token 实际计算量接近？</summary><p>✅ 约 <strong>37B 稠密模型</strong>的计算量，但知识容量对标 671B 大模型</p></details>
+<details><summary>④ MoE 不适合的场景是？</summary><p>✅ 显存紧张的单卡 / 边缘部署（MoE 反而显存门槛更高）</p></details>
+<details><summary>⑤ 训练 MoE 最常见的问题之一是？</summary><p>✅ <strong>专家负载不均</strong>——热门专家被挤爆、冷门闲置，用辅助损失函数强制"雨露均沾"</p></details>
+
+<details><summary>参考核验链接</summary>
+<ul>
+<li><a href="https://arxiv.org/abs/2401.04088">Mixtral of Experts（arXiv）</a></li>
+<li><a href="https://arxiv.org/abs/2412.19437">DeepSeek-V3 技术报告（arXiv）</a></li>
+<li><a href="https://arxiv.org/abs/2101.03961">Switch Transformers（arXiv）</a></li>
+<li><a href="https://arxiv.org/abs/1701.06538">Sparsely-Gated MoE（arXiv）</a></li>
+<li><a href="https://www.nvidia.cn/zh-cn/blog/boost-mixture-of-experts-large-language-model-architecture-performance/">NVIDIA：MoE 大模型架构性能提升</a></li>
+<li><a href="https://huggingface.co/blog/moe">Hugging Face：Mixture of Experts Explained</a></li>
+</ul>
+</details>
+
+<p style="margin-top:2rem;font-size:.9rem;color:var(--muted)">相关：<a href="agent.html">Agent</a> · <a href="llm-context.html">LLM Context</a> · <a href="skill.html">Skill</a> · <a href="concept-relationship.html">概念关系</a>（本页为低负荷可视化重制版 · 2026-09-10）</p>
+
 </body>
 </html>
